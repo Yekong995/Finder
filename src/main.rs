@@ -24,6 +24,7 @@ use ratatui::{
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get the user's profile path
     let env_path = env::var("USERPROFILE")? + "\\AppData\\";
+    let dir_list: Vec<String> = walk_dir(&env_path)?;
 
     // Enable raw mode
     enable_raw_mode()?;
@@ -32,35 +33,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let backend = CrosstermBackend::new(buffer);
     let mut terminal = Terminal::new(backend)?;
 
-    // Initialize the fuzzy matcher and walk the directory
-    let dir_list: Vec<String> = walk_dir(&env_path)?;
-    let matcher = SkimMatcherV2::default();
-
     // Let the user search
     let mut input: String = String::new();
-    let mut score: BinaryHeap<Reverse<(i64, &String)>> = BinaryHeap::new();
 
     loop {
-        // Always clear the score list make sure match to the input
-        score.clear();
 
-        for dir in &dir_list {
-            let match_score = matcher.fuzzy_match(&dir, &input).unwrap_or(0);
+        let matched_dir = fuzzy(dir_list.clone(), input.clone())?;
 
-            if score.len() < 10 {
-                score.push(Reverse((match_score, dir)));
-            } else if let Some(Reverse((min_score, _))) = score.peek() {
-                if match_score > *min_score {
-                    score.pop();
-                    score.push(Reverse((match_score, dir)));
-                }
-            }
-        }
-
-        let sorted_score: Vec<_> = score.clone().into_sorted_vec();
-        let items: Vec<ListItem> = sorted_score
+        let items: Vec<ListItem> = matched_dir
             .iter()
-            .map(|x| ListItem::new(Span::raw(x.0.1.clone())))
+            .map(|x| ListItem::new(Span::raw(x.clone())))
             .collect();
 
         terminal.draw(|f| {
@@ -118,4 +100,33 @@ fn walk_dir(path: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     }
 
     Ok(list)
+}
+
+// Fuzzy search the directory list
+fn fuzzy(dir_list: Vec<String>, input: String) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+
+    // Initialize the fuzzy matcher
+    let matcher = SkimMatcherV2::default();
+    let mut score: BinaryHeap<Reverse<(i64, &String)>> = BinaryHeap::new();
+
+    for dir in &dir_list {
+        let match_score = matcher.fuzzy_match(&dir, &input).unwrap_or(0);
+
+        if score.len() < 10 {
+            score.push(Reverse((match_score, dir)));
+        } else if let Some(Reverse((min_score, _))) = score.peek() {
+            if match_score > *min_score {
+                score.pop();
+                score.push(Reverse((match_score, dir)));
+            }
+        }
+    }
+
+    let matched_dir: Vec<String> = score.clone()
+        .into_sorted_vec()
+        .iter()
+        .map(|x| x.0 .1.clone())
+        .collect();
+
+    Ok(matched_dir)
 }
