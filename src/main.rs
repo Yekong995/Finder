@@ -6,9 +6,10 @@ use std::cmp::Reverse;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use walkdir::WalkDir;
+use tokio::sync::mpsc;
 
 use crossterm::{
-    event::{self, KeyCode, KeyEventKind},
+    event::{self, Event, KeyCode, KeyEventKind},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -21,7 +22,8 @@ use ratatui::{
     Terminal,
 };
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get the user's profile path
     let env_path = env::var("USERPROFILE")? + "\\AppData\\";
     let dir_list: Vec<String> = walk_dir(&env_path)?;
@@ -32,6 +34,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     execute!(buffer, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(buffer);
     let mut terminal = Terminal::new(backend)?;
+
+    let (tx, mut rx) = mpsc::channel(32);
+    let input_task = tokio::spawn(input_handler(tx));
 
     // Let the user search
     let mut input: String = String::new();
@@ -63,24 +68,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             f.render_widget(list, chunks[1]);
         })?;
 
-        // Check for user input
-        if let event::Event::Key(key) = event::read()? {
-            if key.kind == KeyEventKind::Press {
-                match key.code {
-                    KeyCode::Char(c) => input.push(c),
-                    KeyCode::Backspace => {
-                        input.pop();
-                    }
-                    KeyCode::Esc | KeyCode::Enter => break,
-                    _ => (),
-                }
+        if let Some(key) = rx.recv().await {
+            match key {
+                KeyCode::Char(c) => input.push(c),
+                KeyCode::Backspace => { input.pop(); }
+                KeyCode::Esc | KeyCode::Enter => break,
+                _ => (),
             }
-        }
+        };
 
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
     }
 
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    input_task.abort();
     Ok(())
 }
 
@@ -129,4 +131,26 @@ fn fuzzy(dir_list: Vec<String>, input: String) -> Result<Vec<String>, Box<dyn st
         .collect();
 
     Ok(matched_dir)
+}
+
+// Handle user input
+async fn input_handler(tx: mpsc::Sender<KeyCode>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+
+    loop {
+        if let Ok(Event::Key(key)) = event::read() {
+            if key.kind == KeyEventKind::Press {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Enter => {
+                        let _ = tx.send(key.code).await;
+                        break;
+                    },
+                    _ => { let _ = tx.send(key.code).await; }
+                }
+                
+            }
+        }
+
+    }
+
+    Ok(())
 }
