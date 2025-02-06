@@ -1,0 +1,8 @@
+Version 0.1.0
+Created this tool
+
+Version 0.1.1
+Fix permission error while walking directory
+
+Version 0.1.2
+Improve save logic and speed up search speed
