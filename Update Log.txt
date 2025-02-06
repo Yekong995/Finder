@@ -8,4 +8,4 @@ Version 0.1.2
 Improve save logic and speed up search speed
 
 Version 0.1.3
-Move input fuction to a independent thread
+Move input function to a independent thread
