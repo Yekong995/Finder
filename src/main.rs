@@ -53,19 +53,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         terminal.draw(|f| {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Length(3), Constraint::Min(1)].as_ref())
+                .constraints([Constraint::Length(1), Constraint::Length(3), Constraint::Min(1)].as_ref())
                 .split(f.area());
+
+            let message = Paragraph::new(Text::from(Span::styled(
+                "Press 'Esc' or 'Enter' to exit",
+                Style::default().fg(Color::LightYellow),
+            )));
+            f.render_widget(message, chunks[0]);
 
             let input_box = Paragraph::new(Text::from(Span::styled(
                 input.clone(),
                 Style::default().fg(Color::LightYellow),
             )))
             .block(Block::default().title(" Input ").borders(Borders::ALL));
-            f.render_widget(input_box, chunks[0]);
+            f.render_widget(input_box, chunks[1]);
 
             let list =
                 List::new(items).block(Block::default().title(" Results ").borders(Borders::ALL));
-            f.render_widget(list, chunks[1]);
+            f.render_widget(list, chunks[2]);
         })?;
 
         if let Some(key) = rx.recv().await {
