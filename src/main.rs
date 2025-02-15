@@ -1,12 +1,12 @@
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
 use std::env;
 use std::io::stdout;
-use std::collections::BinaryHeap;
-use std::cmp::Reverse;
 
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
-use walkdir::WalkDir;
 use tokio::sync::mpsc;
+use walkdir::WalkDir;
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
@@ -42,7 +42,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut input: String = String::new();
 
     loop {
-
         let matched_dir = fuzzy(dir_list.clone(), input.clone())?;
 
         let items: Vec<ListItem> = matched_dir
@@ -53,7 +52,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         terminal.draw(|f| {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Length(1), Constraint::Length(3), Constraint::Min(1)].as_ref())
+                .constraints(
+                    [
+                        Constraint::Length(1),
+                        Constraint::Length(3),
+                        Constraint::Min(1),
+                    ]
+                    .as_ref(),
+                )
                 .split(f.area());
 
             let message = Paragraph::new(Text::from(Span::styled(
@@ -77,7 +83,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(key) = rx.recv().await {
             match key {
                 KeyCode::Char(c) => input.push(c),
-                KeyCode::Backspace => { input.pop(); }
+                KeyCode::Backspace => {
+                    input.pop();
+                }
                 KeyCode::Esc | KeyCode::Enter => break,
                 _ => (),
             }
@@ -92,7 +100,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// Walk the directory and return a list of paths
+/// Walk through the directory and return a list of directories
+///
+/// # Arguments
+///
+/// * `path` - The path to walk through
+///
+/// # Returns
+///
+/// A list of directories
 fn walk_dir(path: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let mut list: Vec<String> = Vec::new();
 
@@ -110,9 +126,19 @@ fn walk_dir(path: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     Ok(list)
 }
 
-// Fuzzy search the directory list
+/// Fuzzy match the user input with the directory list
+///
+/// Return a list of matched directories with the highest score
+///
+/// # Arguments
+///
+/// * `dir_list` - A list of directories
+/// * `input` - User input
+///
+/// # Returns
+///
+/// A list of matched directories (up to 10) with the highest score
 fn fuzzy(dir_list: Vec<String>, input: String) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-
     // Initialize the fuzzy matcher
     let matcher = SkimMatcherV2::default();
     let mut score: BinaryHeap<Reverse<(i64, &String)>> = BinaryHeap::new();
@@ -130,7 +156,8 @@ fn fuzzy(dir_list: Vec<String>, input: String) -> Result<Vec<String>, Box<dyn st
         }
     }
 
-    let matched_dir: Vec<String> = score.clone()
+    let matched_dir: Vec<String> = score
+        .clone()
         .into_sorted_vec()
         .iter()
         .map(|x| x.0 .1.clone())
@@ -140,22 +167,24 @@ fn fuzzy(dir_list: Vec<String>, input: String) -> Result<Vec<String>, Box<dyn st
 }
 
 // Handle user input
-async fn input_handler(tx: mpsc::Sender<KeyCode>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-
+async fn input_handler(
+    tx: mpsc::Sender<KeyCode>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     loop {
         if let Ok(Event::Key(key)) = event::read() {
+            // Prevent user releasing the key also trigger the event
             if key.kind == KeyEventKind::Press {
                 match key.code {
                     KeyCode::Esc | KeyCode::Enter => {
                         let _ = tx.send(key.code).await;
                         break;
-                    },
-                    _ => { let _ = tx.send(key.code).await; }
+                    }
+                    _ => {
+                        let _ = tx.send(key.code).await;
+                    }
                 }
-                
             }
         }
-
     }
 
     Ok(())
