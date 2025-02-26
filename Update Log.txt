@@ -9,3 +9,6 @@ Improve save logic and speed up search speed
 
 Version 0.1.3
 Move input function to a independent thread
+
+Version 0.1.4
+Add copy function by pressing 'Enter'
