@@ -1,25 +1,22 @@
-use std::cmp::Reverse;
-use std::collections::BinaryHeap;
 use std::env;
 use std::io::stdout;
 
-use fuzzy_matcher::skim::SkimMatcherV2;
-use fuzzy_matcher::FuzzyMatcher;
+use finder::*;
 use tokio::sync::mpsc;
-use walkdir::WalkDir;
+use clipboard_rs::{ClipboardContext, Clipboard};
 
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind},
+    event::{KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout},
-    style::{Color, Style},
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Style, Stylize},
     text::{Span, Text},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
-    Terminal,
+    widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
+    Frame, Terminal,
 };
 
 #[tokio::main]
@@ -27,6 +24,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get the user's profile path
     let env_path = env::var("USERPROFILE")? + "\\AppData\\";
     let dir_list: Vec<String> = walk_dir(&env_path)?;
+    let mut status_code: bool = false;
+    let mut pos: u64 = 0;
 
     // Enable raw mode
     enable_raw_mode()?;
@@ -62,31 +61,53 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .split(f.area());
 
-            let message = Paragraph::new(Text::from(Span::styled(
-                "Press 'Esc' or 'Enter' to exit",
-                Style::default().fg(Color::LightYellow),
-            )));
-            f.render_widget(message, chunks[0]);
-
-            let input_box = Paragraph::new(Text::from(Span::styled(
-                input.clone(),
-                Style::default().fg(Color::LightYellow),
-            )))
-            .block(Block::default().title(" Input ").borders(Borders::ALL));
-            f.render_widget(input_box, chunks[1]);
-
-            let list =
-                List::new(items).block(Block::default().title(" Results ").borders(Borders::ALL));
-            f.render_widget(list, chunks[2]);
+            let _ = render_msg(f, chunks[0]);
+            let _ = render_input(input.clone(), f, chunks[1], status_code);
+            let _ = render_result(items, f, chunks[2], status_code, pos);
         })?;
 
-        if let Some(key) = rx.recv().await {
+        if let Some((key, modifiers)) = rx.recv().await {
+
             match key {
-                KeyCode::Char(c) => input.push(c),
-                KeyCode::Backspace => {
-                    input.pop();
+                KeyCode::Char('r') => {
+                    if modifiers.contains(KeyModifiers::CONTROL)
+                    {
+                        status_code = !status_code;
+                    } else if status_code == false {
+                        input.push('r');
+                    }
                 }
-                KeyCode::Esc | KeyCode::Enter => break,
+
+                KeyCode::Char(c) => {
+                    if status_code == false {
+                        input.push(c);
+                    }
+                },
+                KeyCode::Backspace => {
+                    if status_code == false {
+                        input.pop();
+                    }
+                }
+
+                KeyCode::Down => {
+                    if status_code == true {
+                        pos = (pos + 1).min(matched_dir.len() as u64 - 1);
+                    }
+                }
+                KeyCode::Up => {
+                    if status_code == true {
+                        pos = pos.saturating_sub(1);
+                    }
+                }
+                KeyCode::Enter => {
+                    if status_code == true {
+                        let selected = matched_dir.get(pos as usize).unwrap();
+                        let ctx = ClipboardContext::new().unwrap();
+                        ctx.set_text(selected.clone()).unwrap();
+                    }
+                }
+
+                KeyCode::Esc => break,
                 _ => (),
             }
         };
@@ -100,92 +121,71 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Walk through the directory and return a list of directories
-///
-/// # Arguments
-///
-/// * `path` - The path to walk through
-///
-/// # Returns
-///
-/// A list of directories
-fn walk_dir(path: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let mut list: Vec<String> = Vec::new();
+fn render_msg(f: &mut Frame, chunks: Rect) -> Result<(), Box<dyn std::error::Error>> {
+    let message = Paragraph::new(Text::from(Span::styled(
+        "Press 'Esc' to exit | 'Ctrl + r' to switch tab | 'Enter' to copy selected path",
+        Style::default().fg(Color::LightYellow),
+    )));
+    f.render_widget(message, chunks);
 
-    let walker = WalkDir::new(path).into_iter();
-    for entry in walker {
-        if entry.is_err() {
-            continue;
-        }
-        let entry = entry?;
-        let path = entry.path();
-        let path = path.to_str().unwrap();
-        list.push(path.to_string());
-    }
-
-    Ok(list)
+    Ok(())
 }
 
-/// Fuzzy match the user input with the directory list
-///
-/// Return a list of matched directories with the highest score
-///
-/// # Arguments
-///
-/// * `dir_list` - A list of directories
-/// * `input` - User input
-///
-/// # Returns
-///
-/// A list of matched directories (up to 10) with the highest score
-fn fuzzy(dir_list: Vec<String>, input: String) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    // Initialize the fuzzy matcher
-    let matcher = SkimMatcherV2::default();
-    let mut score: BinaryHeap<Reverse<(i64, &String)>> = BinaryHeap::new();
+fn render_input(
+    input: String,
+    f: &mut Frame,
+    chunks: Rect,
+    focus: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let border_style = if focus == false {
+        Style::reset()
+    } else {
+        Style::new().dim()
+    };
 
-    for dir in &dir_list {
-        let match_score = matcher.fuzzy_match(&dir, &input).unwrap_or(0);
+    let input_box = Paragraph::new(Text::from(Span::styled(
+        input,
+        Style::default().fg(Color::LightYellow),
+    )))
+    .block(
+        Block::bordered()
+            .title(" Search ")
+            .border_type(BorderType::Rounded)
+            .border_style(border_style)
+            .borders(Borders::ALL),
+    );
+    f.render_widget(input_box, chunks);
 
-        if score.len() < 10 {
-            score.push(Reverse((match_score, dir)));
-        } else if let Some(Reverse((min_score, _))) = score.peek() {
-            if match_score > *min_score {
-                score.pop();
-                score.push(Reverse((match_score, dir)));
-            }
-        }
-    }
-
-    let matched_dir: Vec<String> = score
-        .clone()
-        .into_sorted_vec()
-        .iter()
-        .map(|x| x.0 .1.clone())
-        .collect();
-
-    Ok(matched_dir)
+    Ok(())
 }
 
-// Handle user input
-async fn input_handler(
-    tx: mpsc::Sender<KeyCode>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    loop {
-        if let Ok(Event::Key(key)) = event::read() {
-            // Prevent user releasing the key also trigger the event
-            if key.kind == KeyEventKind::Press {
-                match key.code {
-                    KeyCode::Esc | KeyCode::Enter => {
-                        let _ = tx.send(key.code).await;
-                        break;
-                    }
-                    _ => {
-                        let _ = tx.send(key.code).await;
-                    }
-                }
-            }
-        }
+fn render_result(
+    items: Vec<ListItem>,
+    f: &mut Frame,
+    chunks: Rect,
+    focus: bool,
+    pos: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let border_style = if focus == true {
+        Style::reset()
+    } else {
+        Style::new().dim()
+    };
+
+    let mut items = items;
+    let selected = items.get_mut(pos as usize).unwrap();
+    if focus == true {
+        *selected = selected.clone().style(Style::default().bg(Color::DarkGray));
     }
+
+    let list = List::new(items).block(
+        Block::bordered()
+            .title(" Results ")
+            .border_type(BorderType::Rounded)
+            .border_style(border_style)
+            .borders(Borders::ALL),
+    );
+    f.render_widget(list, chunks);
 
     Ok(())
 }
