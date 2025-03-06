@@ -1,7 +1,10 @@
 [package]
 name = "finder"
 version = "0.1.4"
-edition = "2021"
+edition = "2024"
+authors = ["Yk"]
+description = "A fuzzy finder to search specific files in a directory"
+repository = "https://github.com/Yekong995/Finder"
 
 [dependencies]
 clipboard-rs = "0.2.4"
@@ -10,3 +13,10 @@ fuzzy-matcher = "0.3.7"
 ratatui = "0.29.0"
 tokio = { version = "1.43.0", features = ["macros", "rt", "rt-multi-thread", "sync", "time"] }
 walkdir = "2.5.0"
+
+[profile.release]
+opt-level = 3
+strip = true
+lto = true
+codegen-units = 16
+panic = "abort"
