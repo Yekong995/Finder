@@ -11,8 +11,11 @@ clipboard-rs = "0.2.4"
 crossterm = "0.28.1"
 fuzzy-matcher = "0.3.7"
 ratatui = "0.29.0"
-tokio = { version = "1.43.0", features = ["macros", "rt", "rt-multi-thread", "sync", "time"] }
 walkdir = "2.5.0"
+
+[dependencies.tokio]
+version = "1.43.0"
+features = ["macros", "rt", "rt-multi-thread", "sync", "time"]
 
 [profile.release]
 opt-level = 3
