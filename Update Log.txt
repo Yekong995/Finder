@@ -12,3 +12,8 @@ Move input function to a independent thread
 
 Version 0.1.4
 Add copy function by pressing 'Enter'
+
+Version 0.2.0
+Create GUI version
+Split the version into independent versions and freely control them through "features"
+Features: "cli", "ui"
