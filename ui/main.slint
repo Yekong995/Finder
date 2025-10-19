@@ -1,0 +1,90 @@
+import { Palette, LineEdit, VerticalBox, Button, HorizontalBox, StandardListView, StandardButton, Spinner } from "std-widgets.slint";
+import "./FontAwesome.otf";
+
+// Just for setting font-family for button cause button has not indepent properties
+export component ButtonContainer inherits Text {
+    font-family: "Font Awesome 7 Free";
+}
+
+export component MyWindow inherits Window {
+    preferred-width: 440px;
+    preferred-height: 550px;
+    title: "Finder";
+
+    in-out property <string> file_path: "";
+    in-out property <string> search_txt: "";
+    in-out property <[StandardListViewItem]> list_data: [];
+    in-out property <int> index;
+    in-out property <float> prg;
+    callback select-file();
+    callback search-data();
+    callback copy-data();
+    callback select-item(int);
+
+    VerticalBox {
+        padding-top: 10px;
+
+        HorizontalBox {
+            input_field := LineEdit {
+                placeholder-text: "File Path";
+                height: 30px;
+                read-only: true;
+                text: root.file_path;
+            }
+
+            // Select file use btn
+            ButtonContainer {
+                Button {
+                    text: "\u{f07b}";
+                    height: 30px;
+                    clicked => {
+                        root.select-file();
+                    }
+                }
+            }
+
+            Spinner {
+                progress: root.prg;
+            }
+        }
+
+        HorizontalBox {
+            search_field := LineEdit {
+                placeholder-text: "Search";
+                height: 30px;
+                text <=> root.search_txt;
+            }
+
+            // Search btn
+            ButtonContainer {
+                Button {
+                    text: "\u{f054}";
+                    height: 30px;
+                    clicked => {
+                        root.search-data();
+                    }
+                }
+            }
+
+            // Copy btn for selected item
+            ButtonContainer {
+                Button {
+                    text: "\u{f0c5}";
+                    height: 30px;
+                    clicked => {
+                        root.select-item(root.index);
+                    }
+                }
+            }
+        }
+
+        my-list := StandardListView {
+            model: root.list_data;
+            min-height: 450px;
+
+            current-item-changed(current-item) => {
+                root.index = current-item;
+            }
+        }
+    }
+}
