@@ -1,13 +1,18 @@
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
-use tokio::sync::mpsc;
-use walkdir::WalkDir;
-use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
+use fuzzy_matcher::skim::SkimMatcherV2;
+
+#[cfg(feature = "cli")]
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+#[cfg(feature = "cli")]
+use tokio::sync::mpsc;
+#[cfg(feature = "cli")]
+use walkdir::WalkDir;
 
 // Handle user input
+#[cfg(feature = "cli")]
 pub async fn input_handler(
     tx: mpsc::Sender<(KeyCode, KeyModifiers)>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -40,6 +45,7 @@ pub async fn input_handler(
 /// # Returns
 ///
 /// A list of directories
+#[cfg(feature = "cli")]
 pub fn walk_dir(path: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let mut list: Vec<String> = Vec::new();
 
@@ -69,7 +75,10 @@ pub fn walk_dir(path: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
 /// # Returns
 ///
 /// A list of matched directories (up to 10) with the highest score
-pub fn fuzzy(dir_list: Vec<String>, input: String) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+pub fn fuzzy(
+    dir_list: Vec<String>,
+    input: String,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     // Initialize the fuzzy matcher
     let matcher = SkimMatcherV2::default();
     let mut score: BinaryHeap<Reverse<(i64, &String)>> = BinaryHeap::new();
@@ -91,7 +100,7 @@ pub fn fuzzy(dir_list: Vec<String>, input: String) -> Result<Vec<String>, Box<dy
         .clone()
         .into_sorted_vec()
         .iter()
-        .map(|x| x.0 .1.clone())
+        .map(|x| x.0.1.clone())
         .collect();
 
     Ok(matched_dir)
