@@ -1,9 +1,5 @@
 fn main() {
-    let enabled = std::env::var("CARGO_FEATURE_UI").is_ok();
-
-    if enabled {
-        compile_slint();
-    }
+    compile_slint();
 }
 
 #[cfg(feature = "ui")]
