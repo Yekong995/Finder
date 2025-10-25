@@ -9,6 +9,7 @@ export component ButtonContainer inherits Text {
 export component MyWindow inherits Window {
     preferred-width: 440px;
     preferred-height: 550px;
+    default-font-size: 14px;
     title: "Finder";
 
     in-out property <string> file_path: "";
@@ -23,6 +24,12 @@ export component MyWindow inherits Window {
 
     VerticalBox {
         padding-top: 10px;
+
+        HorizontalBox {
+            Text {
+                text: "This tool is designed for searching file in a specified directory\n It maybe taking a bit of time for searching\n Searching time depends on the size of the directory and the number of files";
+            }
+        }
 
         HorizontalBox {
             input_field := LineEdit {
@@ -80,7 +87,7 @@ export component MyWindow inherits Window {
 
         my-list := StandardListView {
             model: root.list_data;
-            min-height: 450px;
+            min-height: 400px;
 
             current-item-changed(current-item) => {
                 root.index = current-item;
