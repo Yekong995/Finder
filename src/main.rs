@@ -1,3 +1,8 @@
+#![cfg_attr(
+    all(feature = "ui", not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
+)]
+
 // Build handler for user didn't choose any features situation
 #[cfg(not(any(feature = "cli", feature = "ui")))]
 compile_error!("❌ You must enable at least one feature, such as --features cli or --features ui");
