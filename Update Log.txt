@@ -17,3 +17,7 @@ Version 0.2.0
 Create GUI version
 Split the version into independent versions and freely control them through "features"
 Features: "cli", "ui"
+
+Version 0.3.0
+Add database to store all file paths
+Add new feature to store all path needed to search
