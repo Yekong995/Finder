@@ -1,6 +1,6 @@
 [package]
 name = "finder"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 authors = ["Yk"]
 description = "A fuzzy finder to search specific files in a directory"
